@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -29,12 +29,15 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   DateTime? _selectedDate;
   String _age = '';
+  late SharedPreferences _prefs;
 
   late Timer _timer;
 
   @override
   void initState() {
     super.initState();
+
+    _loadSelectedDate(); 
 
     _timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       if (_selectedDate != null) {
@@ -49,6 +52,20 @@ class _MyHomePageState extends State<MyHomePage> {
   void dispose(){
     _timer.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadSelectedDate() async {
+    _prefs = await SharedPreferences.getInstance();
+    final storedDate = _prefs.getInt('selectedDate');
+    if( storedDate != null){
+      setState(() {
+        _selectedDate= DateTime.fromMillisecondsSinceEpoch(storedDate);
+      });
+    }
+  }
+
+  Future<void> _saveSelectedDate(DateTime selectedDate) async {
+    await _prefs.setInt('selectedDate',selectedDate.millisecondsSinceEpoch);
   }
 
   @override
@@ -76,6 +93,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 if (datePicked != null) {
                   setState(() {
                     _selectedDate = datePicked;
+                    _saveSelectedDate(datePicked);
                   });
                 }
               },
