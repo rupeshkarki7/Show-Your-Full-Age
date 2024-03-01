@@ -1,6 +1,10 @@
+// ignore_for_file: unused_local_variable
+
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 void main() {
   runApp(const MainApp());
@@ -28,45 +32,99 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   DateTime? _selectedDate;
-  String _age = '';
+  final String _age = '';
   late SharedPreferences _prefs;
-
-  late Timer _timer;
-
+  late FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin;
+  
   @override
   void initState() {
     super.initState();
+    _initLocalNotifications();
+    _loadSelectedDate();
 
-    _loadSelectedDate(); 
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
-      if (_selectedDate != null) {
-        setState(() {
-          _age = calculateAge(_selectedDate!);
-        });
-      }
-    });
+    AndroidAlarmManager.periodic(
+      const Duration(seconds: 60), // Adjust the interval as needed
+      0,
+      _backgroundTask,
+      wakeup: true,
+    );
   }
 
-  @override
-  void dispose(){
-    _timer.cancel();
+@override
+  void dispose() {
+    _flutterLocalNotificationsPlugin.cancelAll();
     super.dispose();
+  }
+Future<void> _initLocalNotifications() async {
+    _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await _flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        _openMyHomePage();
+      },
+    );
+
+    final NotificationAppLaunchDetails? notificationAppLaunchDetails =
+        await _flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+    if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
+      _openMyHomePage();
+    }
+  }
+
+  void _openMyHomePage() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const MyHomePage()),
+    );
   }
 
   Future<void> _loadSelectedDate() async {
     _prefs = await SharedPreferences.getInstance();
     final storedDate = _prefs.getInt('selectedDate');
-    if( storedDate != null){
+    if (storedDate != null) {
       setState(() {
-        _selectedDate= DateTime.fromMillisecondsSinceEpoch(storedDate);
+        _selectedDate = DateTime.fromMillisecondsSinceEpoch(storedDate);
       });
     }
   }
 
   Future<void> _saveSelectedDate(DateTime selectedDate) async {
-    await _prefs.setInt('selectedDate',selectedDate.millisecondsSinceEpoch);
+    await _prefs.setInt('selectedDate', selectedDate.millisecondsSinceEpoch);
   }
+
+  Future<void> _showNotification(String message) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'rpsh',
+      'Rupesh',
+      importance: Importance.max,
+      priority: Priority.high,
+      showWhen: false,
+    );
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+    await _flutterLocalNotificationsPlugin.show(
+      0,
+      'Your Age',
+      message,
+      platformChannelSpecifics,
+    );
+  }
+
+   Future<void> _backgroundTask() async {
+    final prefs = await SharedPreferences.getInstance();
+    final storedDate = prefs.getInt('selectedDate');
+    if (storedDate != null) {
+      final selectedDate = DateTime.fromMillisecondsSinceEpoch(storedDate);
+      final age = calculateAge(selectedDate);
+      await _showNotification(age);
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -117,11 +175,16 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     const SizedBox(height: 16.0),
                     Padding(
-                      padding: const EdgeInsets.only(top: 8.0, bottom: 16.0, left: 12.0, right: 12.0),
-                     child: Text( 'Your Age: $_age}',
-                      style: const TextStyle(fontSize: 20, color: Colors.blue,),
-                      textAlign: TextAlign.center,
-                     ),
+                      padding: const EdgeInsets.only(
+                          top: 8.0, bottom: 16.0, left: 12.0, right: 12.0),
+                      child: Text(
+                        'Your Age: $_age}',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          color: Colors.blue,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ],
                 ),
